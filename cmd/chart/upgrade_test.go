@@ -103,3 +103,27 @@ func Test_tagIsUpgradable(t *testing.T) {
 		})
 	}
 }
+
+func TestRestorePrefix(t *testing.T) {
+	tests := []struct {
+		name       string
+		currentTag string
+		latestTag  string
+		expected   string
+	}{
+		{"currentTag with v prefix", "v1.0.0", "1.1.0", "v1.1.0"},
+		{"currentTag without v prefix", "1.0.0", "1.1.0", "1.1.0"},
+		{"another case with v prefix", "v2.0", "2.1", "v2.1"},
+		{"no v prefix in currentTag", "2.0", "2.1", "2.1"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			result := restorePrefix(tc.currentTag, tc.latestTag)
+			if result != tc.expected {
+				t.Errorf("want: %s\n got: %s\n", tc.expected, result)
+			}
+		})
+	}
+}

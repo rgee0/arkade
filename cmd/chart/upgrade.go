@@ -157,14 +157,14 @@ func splitImageName(reposName string) (string, string) {
 func updateImages(iName string, v bool) (bool, string, error) {
 
 	imageName, tag := splitImageName(iName)
-	ref, err := crane.ListTags(imageName)
+	refs, err := crane.ListTags(imageName)
 	if err != nil {
 		return false, iName, errors.New("unable to list tags for " + imageName)
 	}
 
 	var vs []*semver.Version
-	for _, r := range ref {
-		v, err := semver.NewVersion(r)
+	for _, ref := range refs {
+		v, err := semver.NewVersion(ref)
 		if err == nil {
 			vs = append(vs, v)
 		}
@@ -178,9 +178,7 @@ func updateImages(iName string, v bool) (bool, string, error) {
 
 	latestTag := vs[0].String()
 	// Semver is "eating" the "v" prefix, so we need to add it back, if it was there in first place
-	if strings.HasPrefix(tag, "v") {
-		latestTag = "v" + latestTag
-	}
+	latestTag = restorePrefix(tag, latestTag)
 
 	laterVersionB := false
 
@@ -189,9 +187,9 @@ func updateImages(iName string, v bool) (bool, string, error) {
 
 		laterVersionB = true
 
-		iName = fmt.Sprintf("%s:%s", imageName, latestTag)
+		iName = fmt.Sprintf("%s:%s", imageName, latestTag[:len(tag)])
 		if v {
-			log.Printf("[%s] %s => %s", imageName, tag, latestTag)
+			log.Printf("[%s] %s => %s", imageName, tag, latestTag[:len(tag)])
 		}
 	}
 
@@ -209,4 +207,13 @@ func tagIsUpgradeable(currentTag, latestTag string) bool {
 
 	return latestSemVer.Compare(currentSemVer) == 1 && latestSemVer.Prerelease() == currentSemVer.Prerelease()
 
+}
+
+func restorePrefix(currentTag string, latestTag string) string {
+
+	if strings.HasPrefix(currentTag, "v") {
+		return "v" + latestTag
+	}
+
+	return latestTag
 }
