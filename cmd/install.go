@@ -10,7 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/olekukonko/tablewriter"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 
 	"github.com/alexellis/arkade/cmd/apps"
@@ -49,12 +50,41 @@ command.`,
 		printTable, _ := command.Flags().GetBool("print-table")
 
 		if printTable {
-			table := tablewriter.NewWriter(os.Stdout)
-			table.SetHeader([]string{"Tool", "Description"})
-
-			table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-			table.SetCenterSeparator("|")
-			table.SetAutoWrapText(false)
+			t := table.NewWriter()
+			t.SetOutputMirror(os.Stdout)
+			t.AppendHeader(table.Row{"TOOL", "DESCRIPTION"})
+			t.SetStyle(table.Style{
+				Name: "Markdown",
+				Box: table.BoxStyle{
+					PaddingLeft:      " ",
+					Left:             "|",
+					Right:            "|",
+					MiddleVertical:   "|",
+					MiddleHorizontal: "-",
+					MiddleSeparator:  "+",
+					TopLeft:          "+",
+					TopRight:         "+",
+					BottomLeft:       "+",
+					BottomRight:      "+",
+					LeftSeparator:    "|",
+					RightSeparator:   "|",
+					BottomSeparator:  "+",
+					TopSeparator:     "+",
+				},
+				Color: table.ColorOptions{
+					Header: text.Colors{text.Bold},
+				},
+				Format: table.FormatOptions{
+					HeaderAlign: text.AlignCenter,
+					Header:      text.FormatDefault,
+				},
+				Options: table.Options{
+					DrawBorder:      true,
+					SeparateHeader:  true,
+					SeparateRows:    false,
+					SeparateColumns: true,
+				},
+			})
 
 			appSortedList := make([]string, 0, len(appList))
 
@@ -64,10 +94,10 @@ command.`,
 			sort.Strings(appSortedList)
 
 			for _, k := range appSortedList {
-				table.Append([]string{k, appList[k].Installer().Short})
+				t.AppendRow(table.Row{k, appList[k].Installer().Short})
 			}
 
-			table.Render()
+			t.Render()
 
 			fmt.Printf("\nThere are %d apps that you can install on your cluster.\n", len(appList))
 			return nil

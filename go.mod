@@ -8,6 +8,7 @@ require (
 	github.com/cheggaaa/pb/v3 v3.1.7
 	github.com/docker/go-units v0.5.0
 	github.com/google/go-containerregistry v0.20.3
+	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/morikuni/aec v1.0.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/otiai10/copy v1.14.1
@@ -39,6 +40,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/vbatts/tar-split v0.12.1 // indirect
-	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 )
