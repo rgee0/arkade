@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"text/template"
 	"time"
@@ -20,10 +21,10 @@ import (
 const GitHubVersionStrategy = "github"
 const GitLabVersionStrategy = "gitlab"
 const k8sVersionStrategy = "k8s"
+const minAcceptableScore = 30
 
 const HashicorpShasumStrategy = `hashicorp-sha`
 
-var supportedOS = [...]string{"linux", "darwin", "ming"}
 var supportedArchitectures = [...]string{"x86_64", "arm", "amd64", "armv6l", "armv7l", "arm64", "aarch64"}
 
 // Tool describes how to download a CLI tool from a binary
@@ -68,10 +69,15 @@ type Tool struct {
 	VerifyTemplate string
 
 	VerifyStrategy string
+
+	UseAssetMatcher bool
+
+	AssetMatcherPattern *AssetMatcher
 }
 
 type ReleaseLocation struct {
 	Url     string
+	Assets  string
 	Timeout time.Duration
 	Method  string
 }
@@ -79,6 +85,7 @@ type ReleaseLocation struct {
 var releaseLocations = map[string]ReleaseLocation{
 	GitHubVersionStrategy: {
 		Url:     "https://github.com/%s/%s/releases/latest",
+		Assets:  "https://github.com/%s/%s/releases/expanded_assets/%s",
 		Timeout: time.Second * 10,
 		Method:  http.MethodHead,
 	},
@@ -94,6 +101,39 @@ var releaseLocations = map[string]ReleaseLocation{
 	},
 }
 
+var assetHrefRE = regexp.MustCompile(
+	`href="(/[^"]+/releases/download/[^"]+)"`,
+)
+
+type ResolvedAsset struct {
+	Name string
+	URL  string
+}
+type AssetMatcher struct {
+	OSPatterns   map[string][]string
+	ArchPatterns map[string][]string
+	ExtPatterns  []string
+}
+
+var DefaultAssetMatcher = AssetMatcher{
+	OSPatterns: map[string][]string{
+		"linux":  {`(^|[^a-z])linux([^a-z]|$)`},
+		"darwin": {`(^|[^a-z])(darwin|macos)([^a-z]|$)`},
+		"ming":   {`(^|[^a-z])(windows|win|ming)([^a-z]|$)`},
+	},
+	ArchPatterns: map[string][]string{
+		"amd64": {`(^|[^a-z])(amd64|x86_64)([^a-z]|$)`},
+		"arm64": {`(^|[^a-z])(arm64|aarch64)([^a-z]|$)`},
+		"arm":   {`(^|[^a-z])(armv7|armhf)([^a-z]|$)`},
+	},
+	ExtPatterns: []string{`\.tar\.gz$`, `\.zip$`},
+}
+
+func isSupportedOS(os string) bool {
+	_, found := DefaultAssetMatcher.OSPatterns[strings.ToLower(os)]
+	return found
+}
+
 type ToolLocal struct {
 	Name string
 	Path string
@@ -101,6 +141,15 @@ type ToolLocal struct {
 
 var templateFuncs = map[string]interface{}{
 	"HasPrefix": func(s, prefix string) bool { return strings.HasPrefix(s, prefix) },
+}
+
+func matchesAny(s string, patterns []string) bool {
+	for _, p := range patterns {
+		if regexp.MustCompile(p).MatchString(s) {
+			return true
+		}
+	}
+	return false
 }
 
 func (tool Tool) IsArchive(quiet bool) (bool, error) {
@@ -112,9 +161,7 @@ func (tool Tool) IsArchive(quiet bool) (bool, error) {
 		return false, err
 	}
 
-	return strings.HasSuffix(downloadURL, "tar.gz") ||
-		strings.HasSuffix(downloadURL, "zip") ||
-		strings.HasSuffix(downloadURL, "tgz"), nil
+	return isArchiveStr(downloadURL), nil
 }
 
 func isArchiveStr(downloadURL string) bool {
@@ -122,6 +169,22 @@ func isArchiveStr(downloadURL string) bool {
 	return strings.HasSuffix(downloadURL, "tar.gz") ||
 		strings.HasSuffix(downloadURL, "zip") ||
 		strings.HasSuffix(downloadURL, "tgz")
+}
+
+func normalizeOSArch(os, arch string) (string, string) {
+	switch strings.ToLower(os) {
+	case "windows":
+		os = "ming"
+	}
+	switch strings.ToLower(arch) {
+	case "x86_64":
+		arch = "amd64"
+	case "aarch64":
+		arch = "arm64"
+	case "armv7l", "armv7":
+		arch = "arm"
+	}
+	return os, arch
 }
 
 // GetDownloadURL fetches the download URL for a release of a tool
@@ -153,6 +216,7 @@ func (tool Tool) Head(uri string) (int, string, http.Header, error) {
 	}
 
 	req.Header.Set("User-Agent", pkg.UserAgent())
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -204,6 +268,14 @@ func (tool Tool) GetURL(os, arch, version string, quiet bool) (string, string, e
 	}
 
 	resolvedVersion = version
+
+	if tool.UseAssetMatcher {
+		url, err := resolveTargetAsset(tool, os, arch, version)
+		if err != nil {
+			return "", "", err
+		}
+		return url, resolvedVersion, nil
+	}
 
 	if len(tool.URLTemplate) > 0 {
 		res, err := getByDownloadTemplate(tool, os, arch, version)
@@ -268,6 +340,7 @@ func FindRelease(location, owner, repo string) (string, error) {
 	}
 
 	req.Header.Set("User-Agent", pkg.UserAgent())
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
 	res, err := client.Do(req)
 	if err != nil {
@@ -311,7 +384,18 @@ func formatUrl(url, owner, repo string) string {
 	return url
 }
 
+func formatAssetsUrl(url, owner, repo, version string) string {
+
+	if strings.Contains(url, "%s") {
+
+		url = fmt.Sprintf(url, owner, repo, version)
+	}
+
+	return url
+}
+
 func getBinaryURL(owner, repo, version, downloadName string) string {
+
 	if in := strings.Index(downloadName, "/"); in > -1 {
 		return fmt.Sprintf(
 			"https://github.com/%s/%s/releases/download/%s",
@@ -506,14 +590,20 @@ sudo mv {{.Path}} /usr/local/bin/
 
 // ValidateOS returns whether a given operating system is supported
 func ValidateOS(name string) error {
-	for _, os := range supportedOS {
-		if strings.HasPrefix(strings.ToLower(name), os) {
-			return nil
-		}
+
+	if isSupportedOS(name) {
+		return nil
 	}
 
-	return fmt.Errorf("operating system %q is not supported. Available prefixes: %s",
-		name, strings.Join(supportedOS[:], ", "))
+	keys := make([]string, 0, len(DefaultAssetMatcher.OSPatterns))
+	for k := range DefaultAssetMatcher.OSPatterns {
+		keys = append(keys, k)
+	}
+
+	return fmt.Errorf(
+		"operating system %q is not supported. Available: %s",
+		name, strings.Join(keys, ", "),
+	)
 }
 
 // ValidateArch returns whether a given cpu architecture is supported
@@ -525,4 +615,129 @@ func ValidateArch(name string) error {
 	}
 	return fmt.Errorf("cpu architecture %q is not supported. Available: %s",
 		name, strings.Join(supportedArchitectures[:], ", "))
+}
+
+func getReleasedAssets(location, owner, repo, version string) ([]ResolvedAsset, error) {
+
+	url := formatAssetsUrl(releaseLocations[location].Assets, owner, repo, version)
+	clientTimeout := releaseLocations[location].Timeout
+	client := makeHTTPClient(&clientTimeout, false)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", pkg.UserAgent())
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(
+			"release asset lookup failed (%d) for %s",
+			resp.StatusCode,
+			url,
+		)
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	releaseAssets := parseAssetsFromHTML(string(b))
+
+	return releaseAssets, nil
+}
+
+func scoreAsset(name, os, arch string, matcher AssetMatcher) int {
+	n := strings.ToLower(name)
+
+	if !matchesAny(n, matcher.OSPatterns[os]) || !matchesAny(n, matcher.ArchPatterns[arch]) {
+		return -1
+	}
+
+	score := 40
+	if matchesAny(n, matcher.ExtPatterns) {
+		score += 10
+	}
+	if strings.Contains(n, "sha256") || strings.Contains(n, "checksums") {
+		score -= 100
+	}
+	if strings.Contains(n, "debug") {
+		score -= 20
+	}
+	return score
+}
+
+func resolveTargetAsset(tool Tool, os string, arch string, version string) (string, error) {
+
+	os, arch = normalizeOSArch(os, arch)
+
+	if !isSupportedOS(os) {
+		return "", fmt.Errorf("OS %q is not supported for tool %s", os, tool.Name)
+	}
+
+	releasedAssets, err := getReleasedAssets(tool.VersionStrategy, tool.Owner, tool.Repo, version)
+
+	if err != nil {
+		return "", err
+	}
+
+	matcher := DefaultAssetMatcher
+	if tool.AssetMatcherPattern != nil {
+		matcher = *tool.AssetMatcherPattern
+	}
+
+	best := ""
+	bestScore := -1
+
+	for _, asset := range releasedAssets {
+		score := scoreAsset(asset.Name, os, arch, matcher)
+		if score < 0 {
+			continue
+		}
+
+		if score > bestScore {
+			bestScore = score
+			best = asset.URL
+		}
+	}
+
+	if bestScore < minAcceptableScore {
+		return "", fmt.Errorf("no suitable asset found for %s on %s/%s (%d))", tool.Name, arch, os, bestScore)
+	}
+
+	return best, nil
+}
+
+func parseAssetsFromHTML(html string) []ResolvedAsset {
+
+	matches := assetHrefRE.FindAllStringSubmatch(html, -1)
+
+	seen := map[string]bool{}
+	assets := []ResolvedAsset{}
+
+	for _, m := range matches {
+		href := m[1]
+
+		if seen[href] {
+			continue
+		}
+		seen[href] = true
+
+		name := href[strings.LastIndex(href, "/")+1:]
+
+		assets = append(assets, ResolvedAsset{
+			Name: name,
+			URL:  "https://github.com" + href,
+		})
+	}
+
+	return assets
 }

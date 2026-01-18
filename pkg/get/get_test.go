@@ -404,31 +404,38 @@ func Test_DownloadArkade(t *testing.T) {
 	tool := getTool(name, tools)
 
 	tests := []test{
-		{os: "mingw64_nt-10.0-18362",
+		{
+			os:      "mingw64_nt-10.0-18362",
 			arch:    arch64bit,
 			version: "0.8.28",
 			url:     "https://github.com/alexellis/arkade/releases/download/0.8.28/arkade.exe"},
-		{os: "darwin",
+		{
+			os:      "darwin",
 			arch:    arch64bit,
 			version: "0.8.28",
 			url:     "https://github.com/alexellis/arkade/releases/download/0.8.28/arkade-darwin"},
-		{os: "darwin",
+		{
+			os:      "darwin",
 			arch:    archDarwinARM64,
 			version: "0.8.28",
 			url:     "https://github.com/alexellis/arkade/releases/download/0.8.28/arkade-darwin-arm64"},
-		{os: "linux",
+		{
+			os:      "linux",
 			arch:    arch64bit,
 			version: "0.8.28",
 			url:     "https://github.com/alexellis/arkade/releases/download/0.8.28/arkade"},
-		{os: "linux",
+		{
+			os:      "linux",
 			arch:    "armv6l",
 			version: "0.8.28",
 			url:     "https://github.com/alexellis/arkade/releases/download/0.8.28/arkade-armhf"},
-		{os: "linux",
+		{
+			os:      "linux",
 			arch:    "armv7l",
 			version: "0.8.28",
 			url:     "https://github.com/alexellis/arkade/releases/download/0.8.28/arkade-armhf"},
-		{os: "linux",
+		{
+			os:      "linux",
 			arch:    archARM64,
 			version: "0.8.28",
 			url:     "https://github.com/alexellis/arkade/releases/download/0.8.28/arkade-arm64"},
@@ -1415,38 +1422,44 @@ func Test_DownloadK9s(t *testing.T) {
 
 	tool := getTool(name, tools)
 
-	const toolVersion = "v0.24.10"
+	const toolVersion = "v0.50.18"
 
 	tests := []test{
-		{os: "ming",
+		{
+			os:      "ming",
 			arch:    arch64bit,
 			version: toolVersion,
-			url:     `https://github.com/derailed/k9s/releases/download/v0.24.10/k9s_Windows_amd64.zip`,
+			url:     `https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Windows_amd64.zip`,
 		},
-		{os: "linux",
+		{
+			os:      "linux",
 			arch:    arch64bit,
 			version: toolVersion,
-			url:     `https://github.com/derailed/k9s/releases/download/v0.24.10/k9s_Linux_amd64.tar.gz`,
+			url:     `https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Linux_amd64.tar.gz`,
 		},
-		{os: "darwin",
+		{
+			os:      "darwin",
 			arch:    arch64bit,
 			version: toolVersion,
-			url:     `https://github.com/derailed/k9s/releases/download/v0.24.10/k9s_Darwin_amd64.tar.gz`,
+			url:     `https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Darwin_amd64.tar.gz`,
 		},
-		{os: "darwin",
+		{
+			os:      "darwin",
 			arch:    archDarwinARM64,
 			version: toolVersion,
-			url:     `https://github.com/derailed/k9s/releases/download/v0.24.10/k9s_Darwin_arm64.tar.gz`,
+			url:     `https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Darwin_arm64.tar.gz`,
 		},
-		{os: "linux",
+		{
+			os:      "linux",
 			arch:    archARM64,
 			version: toolVersion,
-			url:     `https://github.com/derailed/k9s/releases/download/v0.24.10/k9s_Linux_arm64.tar.gz`,
+			url:     `https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Linux_arm64.tar.gz`,
 		},
-		{os: "linux",
+		{
+			os:      "linux",
 			arch:    archARM7,
 			version: toolVersion,
-			url:     `https://github.com/derailed/k9s/releases/download/v0.24.10/k9s_Linux_arm.tar.gz`,
+			url:     `https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Linux_armv7.tar.gz`,
 		},
 	}
 
@@ -1456,7 +1469,7 @@ func Test_DownloadK9s(t *testing.T) {
 			t.Fatal(err)
 		}
 		if got != tc.url {
-			t.Errorf("want: %s, got: %s", tc.url, got)
+			t.Errorf("\nwant: %s, \n got: %s", tc.url, got)
 		}
 	}
 }

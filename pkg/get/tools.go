@@ -450,6 +450,7 @@ https://dl.k8s.io/release/{{.Version}}/bin/{{$os}}/{{$arch}}/kubectl{{$ext}}`})
 	{{.Name}}
 	{{- end -}}`,
 		})
+
 	tools = append(tools,
 		Tool{
 			Owner:       "alexellis",
@@ -842,36 +843,12 @@ https://github.com/inlets/inletsctl/releases/download/{{.Version}}/{{$fileName}}
 
 	tools = append(tools,
 		Tool{
-			Owner:       "derailed",
-			Repo:        "k9s",
-			Name:        "k9s",
-			Description: "Provides a terminal UI to interact with your Kubernetes clusters.",
-			BinaryTemplate: `
-
-		{{$extStr := "tar.gz"}}
-		{{ if HasPrefix .OS "ming" -}}
-		{{$extStr = "zip"}}
-		{{- end -}}
-
-		{{$os := "" }}
-		{{ if HasPrefix .OS "ming" -}}
-		{{$os = "Windows"}}
-		{{- else if eq .OS "linux" -}}
-		{{$os = "Linux"}}
-		{{- else if eq .OS "darwin" -}}
-		{{$os = "Darwin"}}
-		{{- end -}}
-
-		{{$arch := .Arch}}
-		{{- if or (eq .Arch "aarch64") (eq .Arch "arm64") -}}
-		{{$arch = "arm64"}}
-		{{- else if eq .Arch "x86_64" -}}
-		{{ $arch = "amd64" }}
-		{{- else if eq .Arch "armv7l" -}}
-		{{$arch = "arm"}}
-		{{- end -}}
-
-		{{.Name}}_{{$os}}_{{$arch}}.{{$extStr}}`,
+			Owner:           "derailed",
+			Repo:            "k9s",
+			Name:            "k9s",
+			Description:     "Provides a terminal UI to interact with your Kubernetes clusters.",
+			VersionStrategy: GitHubVersionStrategy,
+			UseAssetMatcher: true,
 		})
 
 	tools = append(tools,
